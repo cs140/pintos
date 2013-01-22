@@ -7,6 +7,7 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
@@ -23,6 +24,16 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* Array of processes in the THREAD_BLOCKED state and sleeping. */
+static struct sleeping_thread* sleeping_list;
+
+/* Number of processes that are in the sleeping_list */
+#define INITIAL_SLEEPING_THREAD_NUMBER 10
+static int num_sleeping_threads;
+
+/* The amount of memory allocated for the sleeping_list */
+static int sleeping_list_size;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -92,6 +103,10 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+
+  printf("allocation size:%d\n", sizeof(struct sleeping_thread) * INITIAL_SLEEPING_THREAD_NUMBER);
+
+  sleeping_list = NULL;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -330,6 +345,63 @@ thread_foreach (thread_action_func *func, void *aux)
       func (t, aux);
     }
 }
+
+/* Adds the current thread to the list of sleeping threads. */
+void
+thread_set_sleeping (int64_t start, int64_t ticks) 
+{
+  if (sleeping_list == NULL) 
+  {
+    sleeping_list = malloc(sizeof(struct sleeping_thread) * INITIAL_SLEEPING_THREAD_NUMBER);
+    sleeping_list_size = INITIAL_SLEEPING_THREAD_NUMBER;
+    num_sleeping_threads = 0;
+  }
+
+  if (num_sleeping_threads == sleeping_list_size) 
+  {
+    realloc(sleeping_list, sleeping_list_size * sizeof(struct sleeping_thread));
+  }
+
+  struct thread *cur = thread_current ();
+
+  sleeping_list[num_sleeping_threads].thread = cur;
+  sleeping_list[num_sleeping_threads].startTick = start;
+  sleeping_list[num_sleeping_threads].ticksToSleep = ticks;
+
+  num_sleeping_threads++;
+
+  enum intr_level old_level = intr_disable();
+  thread_block();
+  intr_set_level(old_level);
+}
+
+/* Modify to be sorted later. */
+void 
+remove_from_sleeping(int index) 
+{
+  num_sleeping_threads--;
+  memcpy(&sleeping_list[index], 
+        &sleeping_list[num_sleeping_threads], 
+        sizeof(struct sleeping_thread));
+}
+
+/* Wakes sleeping threads that have waited for the appropriate number
+   of ticks. */
+void
+thread_wake_sleeping (uint64_t ticks)
+{
+  int i;
+  for (i=0; i<num_sleeping_threads; i++) 
+  {
+    if (ticks - sleeping_list[i].startTick >= sleeping_list[i].ticksToSleep) 
+    {
+      thread_unblock(sleeping_list[i].thread);
+      remove_from_sleeping(i);
+      i--;
+    }
+  }
+}
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
