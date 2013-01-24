@@ -35,6 +35,8 @@ static int num_sleeping_threads;
 /* The amount of memory allocated for the sleeping_list */
 static int sleeping_list_size;
 
+static struct lock sleeping_lock;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -104,9 +106,10 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
-  printf("allocation size:%d\n", sizeof(struct sleeping_thread) * INITIAL_SLEEPING_THREAD_NUMBER);
+  // printf("allocation size:%d\n", sizeof(struct sleeping_thread) * INITIAL_SLEEPING_THREAD_NUMBER);
 
   sleeping_list = NULL;
+  lock_init(&sleeping_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -350,6 +353,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_sleeping (int64_t start, int64_t ticks) 
 {
+  lock_acquire(&sleeping_lock);
   if (sleeping_list == NULL) 
   {
     sleeping_list = malloc(sizeof(struct sleeping_thread) * INITIAL_SLEEPING_THREAD_NUMBER);
@@ -359,7 +363,8 @@ thread_set_sleeping (int64_t start, int64_t ticks)
 
   if (num_sleeping_threads == sleeping_list_size) 
   {
-    realloc(sleeping_list, sleeping_list_size * sizeof(struct sleeping_thread));
+    sleeping_list = realloc(sleeping_list, 2 * sleeping_list_size * sizeof(struct sleeping_thread));
+    sleeping_list_size *= 2;
   }
 
   struct thread *cur = thread_current ();
@@ -369,6 +374,7 @@ thread_set_sleeping (int64_t start, int64_t ticks)
   sleeping_list[num_sleeping_threads].ticksToSleep = ticks;
 
   num_sleeping_threads++;
+  lock_release(&sleeping_lock);
 
   enum intr_level old_level = intr_disable();
   thread_block();
@@ -385,10 +391,11 @@ remove_from_sleeping(int index)
         sizeof(struct sleeping_thread));
 }
 
-/* Wakes sleeping threads that have waited for the appropriate number
+/* Wakes sleeping threads that have
+ waited for the appropriate number
    of ticks. */
 void
-thread_wake_sleeping (uint64_t ticks)
+thread_wake_sleeping (int64_t ticks)
 {
   int i;
   for (i=0; i<num_sleeping_threads; i++) 
@@ -650,7 +657,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
