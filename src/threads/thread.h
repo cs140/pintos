@@ -105,8 +105,8 @@ struct thread
   struct sleeping_thread
   {
     struct thread* thread;
-    uint64_t startTick;
-    uint64_t ticksToSleep;
+    int64_t startTick;
+    int64_t ticksToSleep;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -139,7 +139,7 @@ void thread_foreach (thread_action_func *, void *);
 
 void thread_set_sleeping (int64_t start, int64_t ticks); 
 void remove_from_sleeping(int index);
-void thread_wake_sleeping (uint64_t ticks);
+void thread_wake_sleeping (int64_t ticks);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
