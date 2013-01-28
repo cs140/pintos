@@ -84,6 +84,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -219,6 +220,11 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  struct thread* cur = thread_current();
+  if (cur->priority < t->priority) {
+    thread_yield();  
+  }
+  
   return tid;
 }
 
@@ -397,6 +403,7 @@ remove_from_sleeping(int index)
 void
 thread_wake_sleeping (int64_t ticks)
 {
+  bool flag = false;
   int i;
   for (i=0; i<num_sleeping_threads; i++) 
   {
@@ -405,16 +412,48 @@ thread_wake_sleeping (int64_t ticks)
       thread_unblock(sleeping_list[i].thread);
       remove_from_sleeping(i);
       i--;
+      flag = true;
     }
+  }
+
+  if (flag) {
+    intr_yield_on_return();  
   }
 }
 
+struct thread*
+highest_priority_thread(struct list* l) 
+{
+  struct thread* highestThread = NULL;
+  struct thread* t;
+  struct list_elem *e;
+  for (e = list_begin(l); e != list_end(l);
+       e = list_next(e))
+    {
+      if (highestThread == NULL) {
+        highestThread = list_entry(e, struct thread, elem);
+      } else {
+          t = list_entry(e, struct thread, elem);
+          if (t->priority > highestThread->priority) {
+            highestThread = t;
+          }
+      }
+    } 
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+  return highestThread;
+}
+
+/* Sets the current thread's priority to new_priority. If the current thread no longer has the highest priority, yields.
+*/
 void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+
+  // struct thread* highest = highest_ready_thread();
+  // if (highest->priority > new_priority) {
+    thread_yield();  
+  // }
 }
 
 /* Returns the current thread's priority. */
@@ -565,14 +604,20 @@ alloc_frame (struct thread *t, size_t size)
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
-   idle_thread. */
+   idle_threa.d. */
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)) {
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+  else {
+    struct thread* t = highest_priority_thread(&ready_list);
+    list_remove(&t->elem);
+
+    return t;
+     // return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page

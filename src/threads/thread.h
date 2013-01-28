@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <pqueue.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -100,6 +101,9 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* Additional fields to be used for priority donation */
+    struct pqueue held_locks; /*locks we currently hold*/
   };
 
   struct sleeping_thread
@@ -137,9 +141,14 @@ void thread_yield (void);
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
+bool thread_less_func (const struct list_elem *a, const struct list_elem *b, 
+void *aux);
+
 void thread_set_sleeping (int64_t start, int64_t ticks); 
 void remove_from_sleeping(int index);
 void thread_wake_sleeping (int64_t ticks);
+
+struct thread* highest_priority_thread(struct list* l);
 
 int thread_get_priority (void);
 void thread_set_priority (int);

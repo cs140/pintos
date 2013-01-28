@@ -113,11 +113,16 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    struct thread* t = highest_priority_thread(&sema->waiters);
+    list_remove(&t->elem);
+    thread_unblock(t);
+    // thread_unblock (list_entry (list_pop_front (&sema->waiters),
+    //                             struct thread, elem));
+  }
   sema->value++;
   intr_set_level (old_level);
+  thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -195,6 +200,8 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
+  
+  /* */
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -301,6 +308,13 @@ cond_wait (struct condition *cond, struct lock *lock)
   lock_acquire (lock);
 }
 
+
+int get_sema_priority(struct semaphore* sema)
+{
+  struct thread* highest = highest_priority_thread(&sema->waiters);
+  return highest->priority;
+}
+
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -316,9 +330,34 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)) {
+    struct semaphore_elem* highestSema = NULL;
+    struct semaphore_elem* t;
+    struct list_elem* e;
+    int highest_priority;
+    for(e = list_begin(&cond->waiters); e != list_end(&cond->waiters); e = list_next(e))
+    {
+      if(highestSema == NULL)
+      {
+        highestSema = list_entry(e,struct semaphore_elem,elem);
+        highest_priority = get_sema_priority(&highestSema->semaphore);
+      } else {
+        t = list_entry(e, struct semaphore_elem,elem);
+        int t_priority = get_sema_priority(&t->semaphore);
+        if(t_priority > highest_priority)
+        {
+          highestSema = t;
+          highest_priority = t_priority;
+        }
+      }
+    }
+
+    //struct list_elem* elem = list_pop_front (&cond->waiters);
+    //struct semaphore_elem* sema = list_entry(elem,struct semaphore_elem,elem);
+
+    list_remove(&highestSema->elem);
+    sema_up(&highestSema->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
