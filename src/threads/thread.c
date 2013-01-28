@@ -200,6 +200,7 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -448,7 +449,11 @@ highest_priority_thread(struct list* l)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  thread_current ()->org_priority = new_priority;
+  if (thread_current()->priority < new_priority) 
+  {
+    thread_current ()->priority = new_priority;
+  }
 
   // struct thread* highest = highest_ready_thread();
   // if (highest->priority > new_priority) {
@@ -580,6 +585,8 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->org_priority = priority;
+  list_init(&(t->held_locks));
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

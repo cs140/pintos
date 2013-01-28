@@ -3,6 +3,7 @@
 
 #include <list.h>
 #include <stdbool.h>
+#include <pqueue.h>
 
 /* A counting semaphore. */
 struct semaphore 
@@ -22,8 +23,10 @@ struct lock
   {
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
-
+    
     /* Additional fields to be used by priority donation */
+    struct list_elem elem;
+    struct list acquiring_threads;
     int priority;
   };
 

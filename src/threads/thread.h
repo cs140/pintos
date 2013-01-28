@@ -89,6 +89,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int org_priority;                   /* Original priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -103,7 +104,7 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
     /* Additional fields to be used for priority donation */
-    struct pqueue held_locks; /*locks we currently hold*/
+    struct list held_locks; /*locks we currently hold*/
   };
 
   struct sleeping_thread
