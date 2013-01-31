@@ -1,7 +1,9 @@
+#ifndef P_Q
+#define P_Q
 #include <stdlib.h>
-#include <stdbool.h>
 
-typedef bool comparator_func(void* a,void* b);
+typedef int comparator_func(void* a,void* b);
+
 
 struct node
 {
@@ -15,6 +17,7 @@ struct pqueue
 	struct node* list;
 	comparator_func* cmp;
 };
+#endif
 
 struct pqueue* pqueue_init(comparator_func* func);
 void pqueue_add(struct pqueue* queue,void* elem);

@@ -104,7 +104,12 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
     /* Additional fields to be used for priority donation */
+    struct lock* lock_to_acquire; /* the lock we are trying to acquire */
     struct list held_locks; /*locks we currently hold*/
+
+    /* Additional fields to be used for mlfqs */
+    int niceness;
+    int recent_cpu;
   };
 
   struct sleeping_thread
@@ -138,6 +143,8 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
@@ -153,6 +160,7 @@ struct thread* highest_priority_thread(struct list* l);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_update_priorities (void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

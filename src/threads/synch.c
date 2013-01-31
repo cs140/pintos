@@ -187,6 +187,31 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+void
+donate_priority (struct lock* lock) {
+  thread_current()->lock_to_acquire = lock;
+  struct lock* cur_lock = lock;
+  struct thread* cur_thread = thread_current();
+  while (true)
+  {
+    if (cur_lock->priority < cur_thread->priority) 
+    {
+      cur_lock->priority = cur_thread->priority;
+      if (cur_lock->holder != NULL) 
+      {
+        cur_lock->holder->priority = cur_lock->priority;
+      } else break;
+
+      cur_thread = cur_lock->holder;
+      cur_lock = cur_lock->holder->lock_to_acquire;
+      if (cur_lock == NULL) 
+      {
+        break;
+      }
+    } else break;
+  }
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -205,14 +230,10 @@ lock_acquire (struct lock *lock)
   enum intr_level old_level = intr_disable ();
   /* Thread priority higher than current lock holder's 
      priority, donate the priority to the lock */
-  if (lock->priority < thread_current()->priority) 
-  {
-    lock->priority = thread_current()->priority;
-    if (lock->holder != NULL) 
-    {
-      lock->holder->priority = lock->priority;
-    }
-  }
+
+  if (!thread_mlfqs)
+    donate_priority(lock);
+
   /* Put the current thread in the list of threads contending for the lock */
   //list_push_back(&(lock->acquiring_threads),&(current_thread()->elem));
 
@@ -221,6 +242,7 @@ lock_acquire (struct lock *lock)
   /* Set priority of the lock to the acquiring thread's priority */
   lock->priority = thread_current()->priority;
   list_push_back(&(thread_current()->held_locks),&(lock->elem));
+  thread_current()->lock_to_acquire = NULL;
   /* Remove the thread from the list of contending threads */
   //if (((current_thread()->elem).prev != NULL) && ((current_thread()->elem).next != NULL))
     //list_remove(&(current_thread()->elem));
@@ -262,30 +284,35 @@ lock_release (struct lock *lock)
 
   enum intr_level old_level = intr_disable ();
   lock->holder = NULL;
-  /* Revert back to the original priority */
-  thread_current()->priority = thread_current()->org_priority;
   
   /* Remove the lock from the list */
   if (((lock->elem).prev != NULL) && ((lock->elem).next != NULL))
     list_remove(&(lock->elem));
 
-  /* Iterate through the list to find the hi*/
-  int highest_priority = 0;
-  struct list_elem* e;
-  for(e = list_begin(&thread_current()->held_locks); 
-    e != list_end(&thread_current()->held_locks); e = list_next(e))
-    {
-      struct lock* t = list_entry(e, struct lock, elem);
-      int t_priority = t->priority;
-      if(t_priority > highest_priority)
-      {
-        highest_priority = t_priority;
-      }
-    }
-  if (thread_current()->priority < highest_priority) 
+  if(!thread_mlfqs)
   {
-    thread_current()->priority = highest_priority;
+    /* Revert back to the original priority */
+    thread_current()->priority = thread_current()->org_priority;
+
+    /* Iterate through the list to find the hi*/
+    int highest_priority = 0;
+    struct list_elem* e;
+    for(e = list_begin(&thread_current()->held_locks); 
+      e != list_end(&thread_current()->held_locks); e = list_next(e))
+      {
+        struct lock* t = list_entry(e, struct lock, elem);
+        int t_priority = t->priority;
+        if(t_priority > highest_priority)
+        {
+          highest_priority = t_priority;
+        }
+      }
+    if (thread_current()->priority < highest_priority) 
+    {
+      thread_current()->priority = highest_priority;
+    }
   }
+  
 
   lock->priority = 0;
 

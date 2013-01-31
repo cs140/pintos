@@ -1,8 +1,7 @@
 #include "pqueue.h"
 
-struct pqueue* pqueue_init(comparator_func* func)
+struct pqueue* pqueue_init(struct pqueue* queue,comparator_func* func)
 {
-	struct pqueue* queue = malloc(sizeof(struct pqueue));
 	queue->list = NULL;
 	queue->cmp = func;
 
